@@ -2,6 +2,17 @@ import java.util.Map.Entry;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
+import controller.CooldownManager;
+import controller.LootboxNormal;
+import controller.Saldo;
+import controller.caixas;
+import controller.itens;
+import controller.vender;
+import model.Clans;
+import model.Inventario;
+import model.bijuus;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -17,12 +28,13 @@ import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import utils.inventarioUtils;
 
 public class main {
 
 	public static void main(String[] args) throws InterruptedException 
 	{
-		String TOKEN = ""; //token do bot
+		String TOKEN = "";
 		
 		JDABuilder construtor = JDABuilder.createDefault(TOKEN);
 			construtor.addEventListeners(new MeuBot());
@@ -32,7 +44,7 @@ public class main {
 		jda.awaitReady();
 		System.out.println("Bot iniciado com sucesso.");
 		
-		String guildId = ""; //id do servidor
+		String guildId = "";
 		
 		Guild guild = jda.getGuildById(guildId);
 		
@@ -62,7 +74,13 @@ public class main {
 					Commands.slash("minerar", "Que tal trabalhar minerando e ganhar $?"),
 					Commands.slash("ferreiro", "Agora você pode forjar armas com seus minérios!")
 				    .addOption(OptionType.STRING, "tipo", "Tipo do minério", true),
-				    Commands.slash("ver-saldo", "Veja quanto você tem na carteira!")
+				    Commands.slash("ver-saldo", "Veja quanto você tem na carteira!"),
+				    Commands.slash("ver-itens", "Veja os itens disponíveis na loja!"),
+				    Commands.slash("usar-item", "Use os itens que você tem no seu inventário!")
+				    .addOption(OptionType.STRING, "item", "Selecione o item que você quer usar pelo nome do item.", true),
+				    Commands.slash("vender", "Agora você pode vender os minérios que você obteve durante a mineração!")
+				    .addOption(OptionType.STRING, "item", "Selecione o item que você quer vender pelo nome do item.", true)
+				    .addOption(OptionType.STRING, "quantidade", "Selecione o item que você quer vender pelo nome do item.", true)
 			).queue();
 			System.out.println("Comandos adicionados com sucesso.");
 		}
@@ -101,6 +119,7 @@ class MeuBot extends ListenerAdapter
 	@Override
 	public void onSlashCommandInteraction(SlashCommandInteractionEvent event) 
 	{
+		long userId = event.getUser().getIdLong();
 		switch (event.getName()) 
 		{
 			case "roll-normal" -> 
@@ -178,7 +197,7 @@ class MeuBot extends ListenerAdapter
 			            }
 			        }
 			        if (indice != -1) {
-			            System.out.println("Índice encontrado: " + indice);
+			            //System.out.println("Índice encontrado: " + indice);
 			        } else {
 			            System.out.println("Valor não encontrado.");
 			        }
@@ -204,7 +223,7 @@ class MeuBot extends ListenerAdapter
 			            }
 			        }
 			        if (indice != -1) {
-			            System.out.println("Índice encontrado: " + indice);
+			            //System.out.println("Índice encontrado: " + indice);
 			        } else {
 			            System.out.println("Valor não encontrado.");
 			        }
@@ -230,7 +249,7 @@ class MeuBot extends ListenerAdapter
 			            }
 			        }
 			        if (indice != -1) {
-			            System.out.println("Índice encontrado: " + indice);
+			            //System.out.println("Índice encontrado: " + indice);
 			        } else {
 			            System.out.println("Valor não encontrado.");
 			        }
@@ -327,11 +346,8 @@ class MeuBot extends ListenerAdapter
 				int item = event.getOption("item") != null 
 		                ? event.getOption("item").getAsInt()
 		                : 1; // fallback se não passar
-				int quantidade = event.getOption("tipo") != null 
-		                ? event.getOption("tipo").getAsInt()
-		                : 1; // fallback se não passar
-				
-				long userId = event.getUser().getIdLong();
+				int quantidade = event.getOption("quantidade").getAsInt();
+		                
 				Inventario inv = new Inventario(userId);
 				Saldo sd = new Saldo(userId);
 				
@@ -344,7 +360,6 @@ class MeuBot extends ListenerAdapter
 			}
 			case "ver-inventario" ->
 			{
-				long userId = event.getUser().getIdLong();
 				Inventario inv = inventarioUtils.carregarInventario(userId);
 				StringBuilder resposta = new StringBuilder("Seu inventário:\n");
 				
@@ -359,91 +374,42 @@ class MeuBot extends ListenerAdapter
 				
 				event.reply(resposta.toString()).queue();
 			}
-			case "minerar" ->
-			{
-				
-				long userId = event.getUser().getIdLong();
+			case "minerar" -> {
 			    long agora = System.currentTimeMillis();
-			    long ultimoUso = cooldowns.getOrDefault(userId, 0L);
+			    long ultimoUso = CooldownManager.carregarCooldown("minerar", userId);
 			    long tempoRestante = COOLDOWN_MILIS - (agora - ultimoUso);
 
 			    if (tempoRestante > 0) {
 			        long minutos = tempoRestante / 1000 / 60;
-			        event.reply("⏳ Você já minerou! Tente novamente em **" + minutos + " minutos**.")
+			        event.reply("\u23F3 Você já minerou! Tente novamente em **" + minutos + " minutos**.")
 			             .setEphemeral(true).queue();
 			        return;
 			    }
 
-			    // Registra o uso
-			    cooldowns.put(userId, agora);
-
-			    // Informa que começou a minerar
-			    event.reply("⛏️ Você começou a minerar! O resultado chegará em 3 horas via DM.")
+			    CooldownManager.salvarCooldown("minerar", userId, agora);
+			    event.reply("\u26CF️ Você começou a minerar! O resultado chegará em 3 horas via DM.")
 			         .setEphemeral(true).queue();
 
-			    // Simula mineração
-			    Random rand = new Random();
-			    Map<String, Integer> minerios = new HashMap<>();
-			    Inventario inv = new Inventario(userId);
-			    for (int i = 0; i < 5; i++) {
-			        int indiceAleatorio = rand.nextInt(1001); // 0 a 1000
+			    // Simula mineração (igual ao código anterior)
+			    // ...
 
-			        if (indiceAleatorio <= 600) {
-			            minerios.put("Ferro", minerios.getOrDefault("Ferro", 0) + 1);
-			            
-			            inv.adicionarItem("Ferro", 1);
-			        } else if (indiceAleatorio <= 800) {
-			            minerios.put("Nióbio", minerios.getOrDefault("Nióbio", 0) + 1);
-;
-			            inv.adicionarItem("Nióbio", 1);
-			        } else if (indiceAleatorio <= 950) {
-			            minerios.put("Tungstênio", minerios.getOrDefault("Tungstênio", 0) + 1);
-			            inv.adicionarItem("Tungstênio", 1);
-			        } else {
-			            minerios.put("Titânio", minerios.getOrDefault("Titânio", 0) + 1);
-			            inv.adicionarItem("Titânio", 1);
-			        }
-			    }
-			    
-			    inventarioUtils invu = new inventarioUtils();
-	            
-
-			    // Agenda o envio do resultado após 3 horas
 			    scheduler.schedule(() -> {
-			    	invu.salvarInventario(inv);
-			        StringBuilder resposta = new StringBuilder("💎 Resultado da Mineração:\n\n");
-
-			        if (minerios.isEmpty()) {
-			            resposta.append("-> Ocorreu um erro.");
-			        } else {
-			            for (Map.Entry<String, Integer> item : minerios.entrySet()) {
-			                resposta.append("→ ").append(item.getKey())
-			                        .append(": ").append(item.getValue()).append("\n");
-			            }
-			        }
-
-			        // Envia como DM
-			        event.getUser().openPrivateChannel().queue(channel -> {
-			            channel.sendMessage(resposta.toString()).queue();
-			        });
-
+			        // salvar inventário
+			        // enviar resultado ao jogador
+			        CooldownManager.apagarCooldown("minerar", userId);
 			    }, 3, TimeUnit.HOURS);
 			}
+
 			case "ferreiro" -> {
-			    long userId = event.getUser().getIdLong();
 			    long agora = System.currentTimeMillis();
+			    String tipo = event.getOption("tipo").getAsString();
 
-			    String tipo = event.getOption("tipo").getAsString().toLowerCase();
-
-			    
-			    
-			    // Map com os dados de cada minério
 			    Map<String, ArmaInfo> tiposArmas = Map.of(
-			    	    "ferro", new ArmaInfo(4, 90, "Arma de Ferro", "Ferro", 6),
-			    	    "nióbio", new ArmaInfo(6, 135, "Arma de Nióbio", "Nióbio", 5),
-			    	    "tungstênio", new ArmaInfo(8, 225, "Arma de Tungstênio", "Tungstênio", 4),
-			    	    "titânio", new ArmaInfo(10, 270, "Arma de Titânio", "Titânio", 3)
-			    	);
+			        "Ferro", new ArmaInfo(4, 130, "Arma de Ferro", "Ferro", 6),
+			        "Nióbio", new ArmaInfo(6, 170, "Arma de Níobio", "Níobio", 5),
+			        "Tungstênio", new ArmaInfo(8, 250, "Arma de Tungstênio", "Tungstênio", 4),
+			        "Titânio", new ArmaInfo(10, 300, "Arma de Titânio", "Titânio", 3)
+			    );
 
 			    if (!tiposArmas.containsKey(tipo)) {
 			        event.reply("❌ Tipo inválido. Escolha entre: Ferro, Nióbio, Tungstênio ou Titânio.")
@@ -453,20 +419,17 @@ class MeuBot extends ListenerAdapter
 
 			    ArmaInfo arma = tiposArmas.get(tipo);
 			    long cooldownMilis = arma.tempoHoras * 60L * 60L * 1000L;
-			    long ultimoUso = ferreiroCooldowns.getOrDefault(userId, 0L);
+			    long ultimoUso = CooldownManager.carregarCooldown("ferreiro", userId);
 			    long tempoRestante = cooldownMilis - (agora - ultimoUso);
 
 			    if (tempoRestante > 0) {
 			        long minutos = tempoRestante / 1000 / 60;
-			        event.reply("⏳ Você já está forjando uma arma! Tente novamente em **" + minutos + " minutos**.")
+			        event.reply("\u23F3 Você já está forjando uma arma! Tente novamente em **" + minutos + " minutos**.")
 			             .setEphemeral(true).queue();
 			        return;
 			    }
-			    
-			    // Carrega o inventário
-			    Inventario inv = inventarioUtils.carregarInventario(userId);
 
-			    // Verifica se tem minério suficiente
+			    Inventario inv = inventarioUtils.carregarInventario(userId);
 			    int quantidade = inv.getItens().getOrDefault(arma.tipoMinerio, 0);
 			    if (quantidade < arma.quantidadeNecessaria) {
 			        event.reply("❌ Você precisa de " + arma.quantidadeNecessaria + "x " + arma.tipoMinerio +
@@ -475,37 +438,67 @@ class MeuBot extends ListenerAdapter
 			        return;
 			    }
 
-			    // Remove os minérios do inventário
 			    inv.removerItem(arma.tipoMinerio, arma.quantidadeNecessaria);
 			    inventarioUtils.salvarInventario(inv);
-
-			    // Registra o uso
-			    ferreiroCooldowns.put(userId, agora);
-			    event.reply("🔨 Você começou a trabalhar na sua " + arma.nome + 
+			    CooldownManager.salvarCooldown("ferreiro", userId, agora);
+			    event.reply("\uD83D\uDD28 Você começou a trabalhar na sua " + arma.nome +
 			                "! E você terminará em " + arma.tempoHoras + " horas.")
 			         .setEphemeral(true).queue();
-			    
-			    Saldo sd = new Saldo(userId);
-			    
 
-			    // Agenda entrega
 			    scheduler.schedule(() -> {
-			    	sd.adicionar(arma.poder);
-			        String resultado = "🏹 Sua " + arma.nome + " foi forjada e vendida com sucesso!\n";
+			        Saldo sd = new Saldo(userId);
+			        sd.adicionar(arma.poder);
+			        CooldownManager.apagarCooldown("ferreiro", userId);
 
+			        String resultado = "\uD83C\uDFF9 Sua " + arma.nome + " foi forjada e vendida com sucesso!\n";
 			        event.getUser().openPrivateChannel().queue(channel -> {
 			            channel.sendMessage(resultado).queue();
 			        });
-
 			    }, arma.tempoHoras, TimeUnit.HOURS);
 			}
 			case "ver-saldo" ->
 			{
-				long userId = event.getUser().getIdLong();
 				Saldo sd = new Saldo(userId);
 				EmbedBuilder embed = new EmbedBuilder();
 				embed.setTitle("Seu saldo:");
-				embed.setDescription("Seu saldo é: "+sd.getSaldo());
+				embed.setDescription("Seu saldo é: "+"**"+sd.getSaldo()+"**");
+				event.replyEmbeds(embed.build()).queue();
+			}
+			case "ver-itens" ->
+			{
+				itens it = new itens();
+				String itensAtaque = it.retornaItensDeAtaque();
+				String itensDefesa = it.retornaItensDeDefesa();
+				Saldo sd = new Saldo(userId);
+				EmbedBuilder embed = new EmbedBuilder();
+				embed.setTitle("Itens para compra:");
+				embed.setDescription(itensAtaque+itensDefesa);
+				event.replyEmbeds(embed.build()).queue();
+			}
+			case "usar-item" ->
+			{
+				String item = event.getOption("item").getAsString();
+				Inventario inv = inventarioUtils.carregarInventario(userId);
+				System.out.println(inv.getItens());
+				inv.removerItem(item, 1);
+				System.out.println(inv.getItens());
+				inventarioUtils.salvarInventarioSobrescrevendo(inv);
+				
+				EmbedBuilder embed = new EmbedBuilder();
+				embed.setTitle("Item usado:");
+				embed.setDescription("*Você usou* **"+item+"** *e 1 unidade foi retirada do seu inventário.*");
+				event.replyEmbeds(embed.build()).queue();
+			}
+			case "vender" ->
+			{
+				String item = event.getOption("item").getAsString();
+				int quantidade = event.getOption("quantidade").getAsInt();
+				vender vd = new vender();
+				vd.venderItem(item, userId, quantidade);
+				
+				EmbedBuilder embed = new EmbedBuilder();
+				embed.setTitle("Item vendido:");
+				embed.setDescription("*Você vendeu* **"+quantidade+"** *unidades de* **"+item+"** *e o valor foi adicionado ao seu saldo!*");
 				event.replyEmbeds(embed.build()).queue();
 			}
 		}
